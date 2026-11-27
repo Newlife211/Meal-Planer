@@ -1,0 +1,187 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/ai_meal_planner/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String?
+  passwordHash  String       @map("password_hash")
+  role          String       @default("user")
+  resetToken    String?      @map("reset_token")
+  resetTokenExpiry DateTime?  @map("reset_token_expiry")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  profile       UserProfile?
+  pantryItems   PantryItem[]
+  mealPlans     MealPlan[]
+  shoppingLists ShoppingList[]
+  supportTickets SupportTicket[]
+
+  stripeCustomerId      String?   @map("stripe_customer_id")
+  stripeSubscriptionId  String?   @map("stripe_subscription_id")
+  subscriptionStatus    String    @default("free") @map("subscription_status")
+  subscriptionPlan      String?   @map("subscription_plan")
+  subscriptionPeriodEnd DateTime? @map("subscription_period_end")
+  planGenCount          Int       @default(0) @map("plan_gen_count")
+  planGenResetAt        DateTime? @map("plan_gen_reset_at")
+  replaceCount          Int       @default(0) @map("replace_count")
+  replaceResetAt        DateTime? @map("replace_reset_at")
+  lastReminderSentAt    DateTime? @map("last_reminder_sent_at")
+  reminderType          String?   @map("reminder_type")
+
+  @@index([stripeCustomerId])
+  @@map("users")
+}
+
+model UserProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique @map("user_id")
+  age              Int?
+  gender           String?
+  weight           Float?
+  height           Float?
+  activityLevel    String?  @map("activity_level")
+  goal             String?
+  dietaryPreference String? @map("dietary_preference")
+  allergies        Json?    @default("[]")
+  budget           Int?
+  currency         String?  @default("RUB")
+  unitSystem       String?  @default("metric") @map("unit_system")
+  cookingTime      String?  @map("cooking_time")
+  onboardingDone   Boolean  @default(false) @map("onboarding_done")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model SupportTicket {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  subject   String
+  status    String           @default("open") // open | answered | closed
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  SupportMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id        String        @id @default(cuid())
+  ticketId  String        @map("ticket_id")
+  isAdmin   Boolean       @default(false) @map("is_admin")
+  body      String
+  createdAt DateTime      @default(now()) @map("created_at")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("support_messages")
+}
+
+model PantryItem {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  name       String
+  quantity   Float
+  unit       String
+  expiryDate DateTime? @map("expiry_date")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("pantry_items")
+}
+
+model MealPlan {
+  id           String        @id @default(cuid())
+  userId       String        @map("user_id")
+  planData     Json          @map("plan_data")
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shoppingList ShoppingList?
+
+  @@index([userId])
+  @@map("meal_plans")
+}
+
+model ShoppingList {
+  id         String   @id @default(cuid())
+  mealPlanId String   @unique @map("meal_plan_id")
+  userId     String   @map("user_id")
+  items      Json     @default("[]")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("shopping_lists")
+}
+
+model SubscriptionEvent {
+  id                   String   @id @default(cuid())
+  userId               String?  @map("user_id")
+  email                String?
+  name                 String?
+  eventType            String   @map("event_type") // new | renewal | canceled | payment_failed
+  plan                 String?  // monthly | yearly
+  status               String?
+  amount               Int?     // in cents
+  currency             String?
+  country              String?  // ISO-2, issuing card country or billing country
+  paymentBrand         String?  @map("payment_brand") // visa | mastercard | amex ...
+  paymentType          String?  @map("payment_type") // card | ...
+  cardLast4            String?  @map("card_last4")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([country])
+  @@index([paymentBrand])
+  @@map("subscription_events")
+}
+
+model PageView {
+  id        String   @id @default(cuid())
+  path      String
+  country   String?  // ISO-2 country code
+  visitorId String?  @map("visitor_id")
+  referrer  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([country])
+  @@index([visitorId])
+  @@map("page_views")
+}
+
+model TelegramChat {
+  id        String   @id // Telegram user id (as string)
+  userId    String?  @unique @map("user_id") // linked Eatwise user; null until logged in
+  lang      String   @default("en")
+  langChosen Boolean  @default(false) @map("lang_chosen") // whether the user explicitly picked a language
+  step      String? // current conversation step for the multi-step flows
+  draft     Json?    @default("{}") // accumulated input for the current flow
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("telegram_chats")
+}
